@@ -1,0 +1,8 @@
+deps
+*.beam
+erl_crash.dump
+log
+
+# IDEA files
+.idea/*
+*.iml
