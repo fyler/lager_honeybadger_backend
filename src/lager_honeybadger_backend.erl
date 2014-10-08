@@ -66,12 +66,24 @@ code_change(_OldVsn, State, _Extra) ->
 
 send_to_honeybadger(ApiKey, Severity, Metadata, Message) ->
   Class = msg_class(Severity, proplists:get_value(module, Metadata, undefined), proplists:get_value(line, Metadata, undefined), proplists:get_value(pid, Metadata, undefined)),
+  Context = proplists:get_value(context, Metadata, {[]}),
+  Params = proplists:get_value(params, Metadata, {[]}),
+  Session = proplists:get_value(session, Metadata, {[]}),
+  Cookies = proplists:get_value(cookies, Metadata, {[]}),
+  Environment = proplists:get_value(environment, Metadata, {[]}),
   [Name, HostName] = string:tokens(atom_to_list(node()), "@"),
   Json = 
     {[
       {error, {[
         {class, list_to_binary(Class)},
         {message, list_to_binary(Message)}
+      ]}},
+      {request, {[
+        {context, Context},
+        {params, Params},
+        {session, Session},
+        {cookies, Cookies},
+        {environment, Environment}
       ]}},
       {server, {[
         {environment_name, list_to_binary(Name)},
