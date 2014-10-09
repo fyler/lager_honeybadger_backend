@@ -69,11 +69,13 @@ send_to_honeybadger(ApiKey, Severity, Metadata, Message) ->
   Context = proplists:get_value(context, Metadata, {[]}),
   Params = proplists:get_value(params, Metadata, {[]}),
   Session = proplists:get_value(session, Metadata, {[]}),
-  Cookies = proplists:get_value(cookies, Metadata, {[]}),
-  Environment = proplists:get_value(environment, Metadata, {[]}),
   [Name, HostName] = string:tokens(atom_to_list(node()), "@"),
   Json = 
     {[
+      {notifier, {[
+        {name, <<"Lager Honeybadger backend">>},
+        {language, <<"Erlang">>}
+      ]}},
       {error, {[
         {class, list_to_binary(Class)},
         {message, list_to_binary(Message)}
@@ -81,14 +83,12 @@ send_to_honeybadger(ApiKey, Severity, Metadata, Message) ->
       {request, {[
         {context, Context},
         {params, Params},
-        {session, Session},
-        {cookies, Cookies},
-        {environment, Environment}
+        {session, Session}
       ]}},
       {server, {[
         {environment_name, list_to_binary(Name)},
         {hostname, list_to_binary(HostName)}
-      ]}}
+      ]}}      
     ]},
   Body = jiffy:encode(Json),
   Headers = [{"X-API-Key", ApiKey}, {"Content-Type", "application/json; charset=utf-8"}, {"Accept", "application/json"}],
