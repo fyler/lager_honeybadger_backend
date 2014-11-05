@@ -33,10 +33,10 @@ init(Params) ->
       [Name, HostName] = string:tokens(atom_to_list(node()), "@"),
       ApiKeyBin = 
         if 
-          is_list(ApiKey) -> iolist_to_bianary(ApiKey);
+          is_list(ApiKey) -> iolist_to_binary(ApiKey);
           true -> ApiKey
         end,
-      {ok, #state{level = LogLevel, api_key = ApiKeyBin, formatter = Formatter, format_config = FormatConfig, name = iolist_to_bianary(Name), hostname = iolist_to_bianary(HostName)}}
+      {ok, #state{level = LogLevel, api_key = ApiKeyBin, formatter = Formatter, format_config = FormatConfig, name = iolist_to_binary(Name), hostname = iolist_to_binary(HostName)}}
   end.
 
 handle_call(get_loglevel, #state{level=Level} = State) ->
