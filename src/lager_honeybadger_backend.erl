@@ -17,7 +17,9 @@
 -record(state, {level :: {'mask', integer()},
                 api_key :: list(),
                 formatter :: atom(),
-                format_config :: any()}).
+                format_config :: any(),
+                name :: binary(),
+                hostname :: binary()}).
 
 init(Params) ->
   case proplists:get_value(api_key, Params, undefined) of
@@ -28,7 +30,13 @@ init(Params) ->
       Formatter = proplists:get_value(formatter, Params, lager_default_formatter),
       FormatConfig = proplists:get_value(formatter_config, Params, ?FORMAT),
       LogLevel = validate_loglevel(proplists:get_value(level, Params, ?DEFAULT_LOG_LEVEL)),
-      {ok, #state{level = LogLevel, api_key = ApiKey, formatter = Formatter, format_config = FormatConfig}}
+      [Name, HostName] = string:tokens(atom_to_list(node()), "@"),
+      ApiKeyBin = 
+        if 
+          is_list(ApiKey) -> iolist_to_bianary(ApiKey);
+          true -> ApiKey
+        end,
+      {ok, #state{level = LogLevel, api_key = ApiKeyBin, formatter = Formatter, format_config = FormatConfig, name = iolist_to_bianary(Name), hostname = iolist_to_bianary(HostName)}}
   end.
 
 handle_call(get_loglevel, #state{level=Level} = State) ->
@@ -44,10 +52,10 @@ handle_call({set_loglevel, Level}, State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
-handle_event({log, Message}, #state{level = Level, api_key = ApiKey, formatter = Formatter, format_config = FormatConfig} = State) ->
+handle_event({log, Message}, #state{level = Level, api_key = ApiKey, formatter = Formatter, format_config = FormatConfig, name = Name, hostname = HostName} = State) ->
   case lager_util:is_loggable(Message, Level, ?MODULE) of
       true ->
-          send_to_honeybadger(ApiKey, lager_msg:severity(Message), lager_msg:metadata(Message), Formatter:format(Message,FormatConfig)),
+          send_to_honeybadger(ApiKey, lager_msg:severity(Message), lager_msg:metadata(Message), Formatter:format(Message,FormatConfig), Name, HostName),
           {ok, State};
       false ->
           {ok, State}
@@ -64,17 +72,18 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-send_to_honeybadger(ApiKey, Severity, Metadata, Message) ->
+send_to_honeybadger(ApiKey, Severity, Metadata, Message, Name, HostName) ->
   Class = msg_class(Severity, proplists:get_value(module, Metadata, undefined), proplists:get_value(line, Metadata, undefined), proplists:get_value(pid, Metadata, undefined)),
   Context = proplists:get_value(context, Metadata, {[]}),
   Params = proplists:get_value(params, Metadata, {[]}),
   Session = proplists:get_value(session, Metadata, {[]}),
-  [Name, HostName] = string:tokens(atom_to_list(node()), "@"),
   Json = 
     {[
       {notifier, {[
         {name, <<"Lager Honeybadger backend">>},
-        {language, <<"Erlang">>}
+        {language, <<"Erlang">>},
+        {url, <<"https://github.com/fyler/lager_honeybadger_backend">>},
+        {version, <<"0.0.1">>}
       ]}},
       {error, {[
         {class, list_to_binary(Class)},
@@ -86,8 +95,8 @@ send_to_honeybadger(ApiKey, Severity, Metadata, Message) ->
         {session, Session}
       ]}},
       {server, {[
-        {environment_name, list_to_binary(Name)},
-        {hostname, list_to_binary(HostName)}
+        {environment_name, Name},
+        {hostname, HostName}
       ]}}      
     ]},
   Body = jiffy:encode(Json),
@@ -95,10 +104,10 @@ send_to_honeybadger(ApiKey, Severity, Metadata, Message) ->
   ibrowse:send_req("https://api.honeybadger.io/v1/notices", Headers, post, Body).
 
 msg_class(Severity, undefined, undefined, Pid) ->
-  lists:flatten(io_lib:format("[~p] ~p ~p", [Severity, process, Pid]));
+  io_lib:format("[~p] ~p ~p", [Severity, process, Pid]);
 
 msg_class(Severity, Module, Line, _Pid) ->
-  lists:flatten(io_lib:format("[~p] ~p:~p", [Severity, Module, Line])).
+  io_lib:format("[~p] ~p:~p", [Severity, Module, Line]).
 
 validate_loglevel(Level) ->
   try lager_util:config_to_mask(Level) of
